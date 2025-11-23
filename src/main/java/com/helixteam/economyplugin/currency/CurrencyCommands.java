@@ -454,14 +454,14 @@ public class CurrencyCommands implements CommandExecutor {
 
             Class<?> landCls = land.getClass();
 
-            plugin.getLogger().fine("Land object class=" + landCls.getName());
-            plugin.getLogger().fine("Checking ownership for player UUID=" + player.getUniqueId());
+            plugin.getDebugLogger().fine("Land object class=" + landCls.getName());
+            plugin.getDebugLogger().fine("Checking ownership for player UUID=" + player.getUniqueId());
 
                 // 1) Intentar isOwner(UUID)
             try {
                 Method isOwner = landCls.getMethod("isOwner", java.util.UUID.class);
                 Object res = isOwner.invoke(land, player.getUniqueId());
-                plugin.getLogger().fine("isOwner(UUID) invocation: " + String.valueOf(res));
+                plugin.getDebugLogger().fine("isOwner(UUID) invocation: " + String.valueOf(res));
                 if (res instanceof Boolean && (Boolean) res) {
                         // Prefer methods that return a textual ULID/id
                         String[] preferIdMethods = new String[]{"getULID", "getUlid", "getULIDString", "getUlidString", "getUniqueId", "getId"};
@@ -471,7 +471,11 @@ public class CurrencyCommands implements CommandExecutor {
                                 Object id = getId.invoke(land);
                                 if (id != null) {
                                     String sid = id.toString();
-                                    plugin.getLogger().fine("Using id from method " + mid + " -> " + sid);
+                                    if (sid == null || sid.trim().isEmpty()) {
+                                        plugin.getDebugLogger().fine("Method " + mid + " returned empty id; ignoring.");
+                                        continue;
+                                    }
+                                    plugin.getDebugLogger().fine("Using id from method " + mid + " -> " + sid);
                                     // If method returned numeric -1, keep searching
                                     if (sid.equals("-1") || sid.equals("0")) {
                                         continue;
@@ -479,7 +483,7 @@ public class CurrencyCommands implements CommandExecutor {
                                     return sid;
                                 }
                             } catch (NoSuchMethodException ignored) {
-                                plugin.getLogger().fine("Method not present on Land: " + mid);
+                                plugin.getDebugLogger().fine("Method not present on Land: " + mid);
                             }
                         }
 
@@ -487,10 +491,14 @@ public class CurrencyCommands implements CommandExecutor {
                         try {
                             String repr = land.toString();
                             java.util.regex.Matcher m = java.util.regex.Pattern.compile("ulid=([^,}]+)").matcher(repr);
-                            if (m.find()) {
+                                if (m.find()) {
                                 String ulid = m.group(1);
-                                plugin.getLogger().fine("Extracted ULID from toString(): " + ulid);
-                                return ulid;
+                                if (ulid != null && !ulid.trim().isEmpty()) {
+                                    plugin.getDebugLogger().fine("Extracted ULID from toString(): " + ulid);
+                                    return ulid;
+                                } else {
+                                    plugin.getDebugLogger().fine("Extracted ULID from toString() was empty; ignoring.");
+                                }
                             }
                         } catch (Throwable ignored) {}
 
@@ -521,7 +529,7 @@ public class CurrencyCommands implements CommandExecutor {
                 Method getOwnerUID = findMethod.apply("getOwnerUID");
                 if (getOwnerUID != null) {
                     Object ou = getOwnerUID.invoke(land);
-                    plugin.getLogger().fine("getOwnerUID() -> " + (ou == null ? "null" : (ou.getClass().getName() + " -> " + ou.toString())));
+                    plugin.getDebugLogger().fine("getOwnerUID() -> " + (ou == null ? "null" : (ou.getClass().getName() + " -> " + ou.toString())));
                     java.util.UUID ownerUuid = null;
                     if (ou instanceof java.util.UUID) ownerUuid = (java.util.UUID) ou;
                     else if (ou instanceof String) {
@@ -533,6 +541,9 @@ public class CurrencyCommands implements CommandExecutor {
                             Object id2 = getId2.invoke(land);
                             if (id2 != null) {
                                 String sid = id2.toString();
+                                if (sid == null || sid.trim().isEmpty()) {
+                                    plugin.getDebugLogger().fine("getId() returned empty id; attempting ULID fallback.");
+                                }
                                 if (sid.equals("-1") || sid.equals("0")) {
                                     // try extracting ULID from toString() as fallback
                                     try {
@@ -540,8 +551,10 @@ public class CurrencyCommands implements CommandExecutor {
                                         java.util.regex.Matcher m = java.util.regex.Pattern.compile("ulid=([^,}]+)").matcher(repr);
                                         if (m.find()) {
                                             String ulid = m.group(1);
-                                            plugin.getLogger().fine("Extracted ULID from toString() as fallback: " + ulid);
-                                            return ulid;
+                                            if (ulid != null && !ulid.trim().isEmpty()) {
+                                                plugin.getDebugLogger().fine("Extracted ULID from toString() as fallback: " + ulid);
+                                                return ulid;
+                                            }
                                         }
                                     } catch (Throwable ignored) {}
                                     // otherwise return null to indicate not found
@@ -561,7 +574,7 @@ public class CurrencyCommands implements CommandExecutor {
                 Method getOwner = findMethod.apply("getOwner");
                 if (getOwner != null) {
                     Object owner = getOwner.invoke(land);
-                    plugin.getLogger().fine("getOwner() -> " + (owner == null ? "null" : (owner.getClass().getName() + " -> " + owner.toString())));
+                    plugin.getDebugLogger().fine("getOwner() -> " + (owner == null ? "null" : (owner.getClass().getName() + " -> " + owner.toString())));
                     if (owner != null) {
                         java.util.UUID ownerUuid = null;
                         if (owner instanceof java.util.UUID) ownerUuid = (java.util.UUID) owner;
@@ -572,14 +585,14 @@ public class CurrencyCommands implements CommandExecutor {
                             try {
                                 Method gu = owner.getClass().getMethod("getUuid");
                                 Object ou = gu.invoke(owner);
-                                plugin.getLogger().fine("owner.getUuid() -> " + (ou == null ? "null" : (ou.getClass().getName() + " -> " + ou.toString())));
+                                plugin.getDebugLogger().fine("owner.getUuid() -> " + (ou == null ? "null" : (ou.getClass().getName() + " -> " + ou.toString())));
                                 if (ou instanceof java.util.UUID) ownerUuid = (java.util.UUID) ou;
                                 else if (ou instanceof String) ownerUuid = java.util.UUID.fromString((String) ou);
                             } catch (NoSuchMethodException ignored2) {
                                 try {
                                     Method gu2 = owner.getClass().getMethod("getUniqueId");
                                     Object ou2 = gu2.invoke(owner);
-                                    plugin.getLogger().fine("owner.getUniqueId() -> " + (ou2 == null ? "null" : (ou2.getClass().getName() + " -> " + ou2.toString())));
+                                    plugin.getDebugLogger().fine("owner.getUniqueId() -> " + (ou2 == null ? "null" : (ou2.getClass().getName() + " -> " + ou2.toString())));
                                     if (ou2 instanceof java.util.UUID) ownerUuid = (java.util.UUID) ou2;
                                     else if (ou2 instanceof String) ownerUuid = java.util.UUID.fromString((String) ou2);
                                 } catch (NoSuchMethodException ignored3) {
@@ -593,14 +606,19 @@ public class CurrencyCommands implements CommandExecutor {
                                     Object id2 = getId2.invoke(land);
                                     if (id2 != null) {
                                         String sid = id2.toString();
+                                        if (sid == null || sid.trim().isEmpty()) {
+                                            plugin.getDebugLogger().fine("getId() returned empty id; attempting ULID fallback.");
+                                        }
                                         if (sid.equals("-1") || sid.equals("0")) {
                                             try {
                                                 String repr = land.toString();
                                                 java.util.regex.Matcher m = java.util.regex.Pattern.compile("ulid=([^,}]+)").matcher(repr);
                                                 if (m.find()) {
                                                     String ulid = m.group(1);
-                                                    plugin.getLogger().fine("Extracted ULID from toString() as fallback: " + ulid);
-                                                    return ulid;
+                                                    if (ulid != null && !ulid.trim().isEmpty()) {
+                                                        plugin.getDebugLogger().fine("Extracted ULID from toString() as fallback: " + ulid);
+                                                        return ulid;
+                                                    }
                                                 }
                                             } catch (Throwable ignored) {}
                                             return null;
@@ -623,14 +641,14 @@ public class CurrencyCommands implements CommandExecutor {
                     if (idObj != null) {
                         String possibleId = idObj.toString();
                         // Reject sentinel values like -1 or 0 even for admin/op; try extracting ULID from toString() instead
-                        if (possibleId.equals("-1") || possibleId.equals("0")) {
-                            plugin.getLogger().fine("Fallback getId() returned sentinel value '" + possibleId + "' for land; attempting to extract ULID from toString() instead.");
+                        if (possibleId == null || possibleId.trim().isEmpty() || possibleId.equals("-1") || possibleId.equals("0")) {
+                            plugin.getDebugLogger().fine("Fallback getId() returned sentinel/empty value '" + possibleId + "' for land; attempting to extract ULID from toString() instead.");
                             try {
                                 String repr = land.toString();
                                 java.util.regex.Matcher m = java.util.regex.Pattern.compile("ulid=([^,}]+)").matcher(repr);
                                 if (m.find()) {
                                     String ulid = m.group(1);
-                                    plugin.getLogger().fine("Extracted ULID from toString() as fallback: " + ulid);
+                                    plugin.getDebugLogger().fine("Extracted ULID from toString() as fallback: " + ulid);
                                     return ulid;
                                 }
                             } catch (Throwable ignored2) {}
@@ -640,7 +658,7 @@ public class CurrencyCommands implements CommandExecutor {
                         }
 
                         if (player.hasPermission("helieco.admin") || player.isOp()) {
-                            plugin.getLogger().fine("Player " + player.getName() + " has admin/op permission; granting Land id " + possibleId + " as fallback.");
+                            plugin.getDebugLogger().fine("Player " + player.getName() + " has admin/op permission; granting Land id " + possibleId + " as fallback.");
                             return possibleId;
                         }
                     }
@@ -649,11 +667,9 @@ public class CurrencyCommands implements CommandExecutor {
             }
 
             plugin.getLogger().warning("No se pudo determinar ownership for Land (reduced logging). Enable DEBUG for details.");
-            plugin.getLogger().fine(() -> {
-                StringBuilder sb = new StringBuilder();
-                for (Method mm : landCls.getMethods()) sb.append(" - ").append(mm.toString()).append('\n');
-                return sb.toString();
-            });
+            StringBuilder sb = new StringBuilder();
+            for (Method mm : landCls.getMethods()) sb.append(" - ").append(mm.toString()).append('\n');
+            plugin.getDebugLogger().fine(sb.toString());
 
             return null;
         } catch (Throwable t) {

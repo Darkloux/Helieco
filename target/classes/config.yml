@@ -10,10 +10,23 @@ currency:
     # Si true, registra en logs cada sincronización exitosa por land. Por defecto false para reducir ruido.
     log_success: false
 
+  # Debug logging to a separate file. When enabled, FINE/FINER logs emitted
+  # by the plugin are written to the given filename under the plugin folder.
+  # Useful to avoid console spam while keeping detailed traces in a file.
+  logging:
+    debug_to_file:
+      enabled: false
+      filename: debug.log
+
 biomes:
   - PLAINS
   - DESERT
   - SAVANNA
+
+# Cooldown en segundos para reglas de drops por bioma: si un jugador ya ha aplicado
+# una regla para un material concreto, se ignorará la re-aplicación durante este
+# intervalo. Valor por defecto: 5 segundos.
+biome_drop_cooldown_seconds: 5
 
 # Reglas avanzadas por bioma y material. Semántica:
 # - chance: probabilidad 0.0..1.0 de que se aplique multiplier

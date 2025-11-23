@@ -95,6 +95,16 @@ public class BiomeDropManager {
                     }
                 }
 
+                // Sanitizar valores: chance debe estar en [0.0, 1.0]. multiplier no debe ser negativo.
+                if (Double.isNaN(chance) || chance < 0.0 || chance > 1.0) {
+                    plugin.getLogger().warning("Chance fuera de rango en config (biome " + biomeKey + ", material " + matKey + "): " + chance + " - será recortado a 0..1");
+                    chance = Math.max(0.0, Math.min(1.0, Double.isNaN(chance) ? 0.0 : chance));
+                }
+                if (Double.isNaN(multiplier) || multiplier < 0.0) {
+                    plugin.getLogger().warning("Multiplier inválido en config (biome " + biomeKey + ", material " + matKey + "): " + multiplier + " - se ajustará a >=0");
+                    multiplier = Math.max(0.0, Double.isNaN(multiplier) ? 1.0 : multiplier);
+                }
+
                 DropRule rule = new DropRule(material, chance, multiplier);
                 materialRules.put(material, rule);
             }
@@ -107,6 +117,15 @@ public class BiomeDropManager {
         Map<Material, DropRule> m = rules.get(biome);
         if (m == null) return Optional.empty();
         return Optional.ofNullable(m.get(material));
+    }
+
+    /**
+     * Indica si existen reglas configuradas para un bioma dado.
+     * Si no existen reglas para el bioma, el plugin no debe interferir
+     * con los drops por defecto en ese bioma.
+     */
+    public boolean hasRulesForBiome(Biome biome) {
+        return rules.containsKey(biome);
     }
 
 }

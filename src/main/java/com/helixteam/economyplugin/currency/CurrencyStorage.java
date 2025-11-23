@@ -34,7 +34,9 @@ public class CurrencyStorage {
 
         try {
             cfg.save(f);
-            plugin.getLogger().info("Saved currency file: " + f.getAbsolutePath());
+            boolean logSave = plugin.getConfig().getBoolean("currency.storage.log_save", false);
+            if (logSave) plugin.getLogger().info("Saved currency file: " + f.getAbsolutePath());
+            else plugin.getDebugLogger().fine("Saved currency file: " + f.getAbsolutePath());
         } catch (Exception e) {
             plugin.getLogger().severe("No se pudo guardar currency for land " + currency.getLandId() + ": " + e.getMessage());
         }

@@ -7,6 +7,9 @@ import org.bukkit.inventory.ItemStack;
 
 import java.util.Collection;
 import java.util.Random;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Listener que aplica las reglas dinámicas cargadas por BiomeDropManager.
@@ -16,9 +19,13 @@ public class BiomeDropListener implements Listener {
 
     private final BiomeDropManager manager;
     private final Random random = new Random();
+    // cooldowns por jugador -> material -> timestamp(ms)
+    private final Map<UUID, Map<org.bukkit.Material, Long>> lastApplied = new ConcurrentHashMap<>();
+    private final int cooldownSeconds;
 
-    public BiomeDropListener(BiomeDropManager manager) {
+    public BiomeDropListener(BiomeDropManager manager, org.bukkit.plugin.Plugin plugin) {
         this.manager = manager;
+        this.cooldownSeconds = plugin.getConfig().getInt("biome_drop_cooldown_seconds", 5);
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -29,15 +36,49 @@ public class BiomeDropListener implements Listener {
         var biome = block.getBiome();
         var material = block.getType();
 
+        // Si no hay reglas configuradas para este bioma, no interferimos
+        if (!manager.hasRulesForBiome(biome)) return;
+
         var opt = manager.getRule(biome, material);
-        if (opt.isEmpty()) return;
+        BiomeDropManager.DropRule rule = null;
 
-        BiomeDropManager.DropRule rule = opt.get();
+        // Obtenemos drops posibles una sola vez (se usará tanto para decidir si aplicar reglas
+        // como para generar las entidades resultantes).
+        Collection<ItemStack> drops = block.getDrops(player.getInventory().getItemInMainHand());
 
-        // Desactivamos los drops automáticos y gestionamos manualmente según reglas
+        // Comprueba cooldowns: si para alguno de los materiales ya existe un cooldown
+        // activo para este jugador, no interferimos (dejamos comportamiento por defecto).
+        UUID puid = player.getUniqueId();
+        long now = System.currentTimeMillis();
+        Map<org.bukkit.Material, Long> playerMap = lastApplied.get(puid);
+        if (playerMap != null) {
+            for (ItemStack d : drops) {
+                Long t = playerMap.get(d.getType());
+                if (t != null && (now - t) < (long) cooldownSeconds * 1000L) {
+                    // Cooldown activo: no interferir
+                    return;
+                }
+            }
+        }
+
+        // Si no hay regla para el bloque en sí, comprobamos si alguna de las posibles
+        // piezas a soltar tiene una regla específica. Si ninguna tiene regla, no interferimos.
+        if (opt.isEmpty()) {
+            boolean anyDropRule = false;
+            for (ItemStack d : drops) {
+                if (manager.getRule(biome, d.getType()).isPresent()) {
+                    anyDropRule = true;
+                    break;
+                }
+            }
+            if (!anyDropRule) return;
+        } else {
+            rule = opt.get();
+        }
+
+        // Desactivamos los drops automáticos y gestionamos manualmente según las reglas encontradas
         event.setDropItems(false);
 
-        Collection<ItemStack> drops = block.getDrops(player.getInventory().getItemInMainHand());
         for (ItemStack drop : drops) {
             int baseAmount = drop.getAmount();
 
@@ -45,10 +86,21 @@ public class BiomeDropListener implements Listener {
             var dropRuleOpt = manager.getRule(biome, drop.getType());
             BiomeDropManager.DropRule ruleToApply = dropRuleOpt.orElse(rule);
 
+            // Si no existe ninguna regla para este drop concreto (y rule también puede ser null),
+            // mantenemos el comportamiento por defecto (mismo amount) — pero dado que hemos desactivado
+            // los drops automáticos, debemos re-emitir el drop con la cantidad original.
+            if (ruleToApply == null) {
+                ItemStack outDefault = drop.clone();
+                outDefault.setAmount(baseAmount);
+                block.getWorld().dropItemNaturally(block.getLocation(), outDefault);
+                continue;
+            }
+
             double r = random.nextDouble();
 
             int finalAmount;
-            if (r <= ruleToApply.chance) {
+            // Use strict comparison so chance==0.0 never applies and chance==1.0 always applies
+            if (r < ruleToApply.chance) {
                 // Se aplica el multiplier
                 if (Double.compare(ruleToApply.multiplier, 0.0) == 0) {
                     // multiplier == 0 => drop nulo
@@ -63,6 +115,14 @@ public class BiomeDropListener implements Listener {
             ItemStack out = drop.clone();
             out.setAmount(finalAmount);
             block.getWorld().dropItemNaturally(block.getLocation(), out);
+        }
+
+        // Registrar timestamps de aplicación para evitar re-aplicaciones rápidas
+        UUID playerId = player.getUniqueId();
+        Map<org.bukkit.Material, Long> map = lastApplied.computeIfAbsent(playerId, k -> new ConcurrentHashMap<>());
+        long appliedAt = System.currentTimeMillis();
+        for (ItemStack d : drops) {
+            map.put(d.getType(), appliedAt);
         }
     }
 }

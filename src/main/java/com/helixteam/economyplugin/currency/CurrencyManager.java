@@ -232,16 +232,16 @@ public class CurrencyManager {
         for (String name : tryNames) {
             try {
                 Method m = liCls.getMethod(name, String.class);
-                plugin.getLogger().fine("Trying Lands method: " + name + "(String)");
+                plugin.getDebugLogger().fine("Trying Lands method: " + name + "(String)");
                 try {
                     Object res = m.invoke(lands, landId);
-                    plugin.getLogger().fine("Result for " + name + ": " + (res == null ? "null" : res.toString()));
+                    plugin.getDebugLogger().fine("Result for " + name + ": " + (res == null ? "null" : res.toString()));
                     if (res != null) return res;
                 } catch (IllegalAccessException | java.lang.reflect.InvocationTargetException e) {
                     plugin.getLogger().warning("Error invoking " + name + " on LandsIntegration: " + e.getMessage());
                 }
             } catch (NoSuchMethodException e) {
-                plugin.getLogger().fine("Lands method not present: " + name);
+                plugin.getDebugLogger().fine("Lands method not present: " + name);
             }
         }
 
@@ -272,7 +272,7 @@ public class CurrencyManager {
         }
 
         // Nueva estrategia: intentar obtener colecciones de lands y buscar coincidencias por ULID
-        plugin.getLogger().fine("findLandById: intentando búsqueda por colección/iterables en LandsIntegration");
+        plugin.getDebugLogger().fine("findLandById: intentando búsqueda por colección/iterables en LandsIntegration");
         for (Method m : liCls.getMethods()) {
             try {
                 // Solo métodos sin parámetros
@@ -280,9 +280,9 @@ public class CurrencyManager {
                 Class<?> ret = m.getReturnType();
                 boolean looksLikeCollection = java.util.Collection.class.isAssignableFrom(ret) || ret.isArray() || java.lang.Iterable.class.isAssignableFrom(ret) || java.util.Map.class.isAssignableFrom(ret);
                 if (!looksLikeCollection) continue;
-                plugin.getLogger().fine("Invoking candidate method for collections: " + m.getName());
+                plugin.getDebugLogger().fine("Invoking candidate method for collections: " + m.getName());
                 Object out = null;
-                try { out = m.invoke(lands); } catch (Throwable t) { plugin.getLogger().fine("Invocation failed for " + m.getName() + ": " + t.getMessage()); continue; }
+                try { out = m.invoke(lands); } catch (Throwable t) { plugin.getDebugLogger().fine("Invocation failed for " + m.getName() + ": " + t.getMessage()); continue; }
                 if (out == null) continue;
 
                 java.util.Iterator<?> iter = null;
@@ -296,7 +296,7 @@ public class CurrencyManager {
                         try {
                             String ts = candidate.toString();
                             if (ts != null && ts.contains(landId)) {
-                                plugin.getLogger().fine("findLandById: matched land via collection method " + m.getName());
+                                plugin.getDebugLogger().fine("findLandById: matched land via collection method " + m.getName());
                                 return candidate;
                             }
                         } catch (Throwable ignored) {}
@@ -306,7 +306,7 @@ public class CurrencyManager {
                                     Method gm = candidate.getClass().getMethod(gid);
                                     Object val = gm.invoke(candidate);
                                     if (val != null && val.toString().equals(landId)) {
-                                        plugin.getLogger().fine("findLandById: matched land via getter " + gid + " on " + m.getName());
+                                        plugin.getDebugLogger().fine("findLandById: matched land via getter " + gid + " on " + m.getName());
                                         return candidate;
                                     }
                                 } catch (NoSuchMethodException ignored) {}
@@ -330,7 +330,7 @@ public class CurrencyManager {
                     try {
                         String ts = candidate.toString();
                         if (ts != null && ts.contains(landId)) {
-                            plugin.getLogger().fine("findLandById: matched land via collection method " + m.getName());
+                            plugin.getDebugLogger().fine("findLandById: matched land via collection method " + m.getName());
                             return candidate;
                         }
                     } catch (Throwable ignored) {}
@@ -341,7 +341,7 @@ public class CurrencyManager {
                                 Method gm = candidate.getClass().getMethod(gid);
                                 Object val = gm.invoke(candidate);
                                 if (val != null && val.toString().equals(landId)) {
-                                    plugin.getLogger().fine("findLandById: matched land via getter " + gid + " on " + m.getName());
+                                    plugin.getDebugLogger().fine("findLandById: matched land via getter " + gid + " on " + m.getName());
                                     return candidate;
                                 }
                             } catch (NoSuchMethodException ignored) {}
@@ -350,7 +350,7 @@ public class CurrencyManager {
                 }
             } catch (Throwable t) {
                 // defensa: no dejar que una excepción rompa la búsqueda
-                plugin.getLogger().fine("Error scanning method " + m.getName() + ": " + t.getMessage());
+                plugin.getDebugLogger().fine("Error scanning method " + m.getName() + ": " + t.getMessage());
             }
         }
         return null;
@@ -459,12 +459,12 @@ public class CurrencyManager {
             Object land = findLandById(landId);
             if (land == null) {
                 // do not spam logs if land not found during periodic runs
-                plugin.getLogger().finer("syncFromLands: no se encontró Land para id=" + landId);
+                plugin.getDebugLogger().finer("syncFromLands: no se encontró Land para id=" + landId);
                 return false;
             }
             java.math.BigDecimal bank = readBankFromLandObject(land);
             if (bank == null) {
-                plugin.getLogger().finer("syncFromLands: no se pudo leer banco desde Land " + landId);
+                plugin.getDebugLogger().finer("syncFromLands: no se pudo leer banco desde Land " + landId);
                 return false;
             }
             var lc = getOrCreate(landId);
@@ -472,10 +472,10 @@ public class CurrencyManager {
             save(lc);
             requestRefresh(landId);
             // Log successful sync only if configured to do so (reduces log noise)
-            if (plugin.getConfig().getBoolean("currency.sync.log_success", false)) {
+                if (plugin.getConfig().getBoolean("currency.sync.log_success", false)) {
                 plugin.getLogger().info("Sincronizado banco desde Lands para " + landId + ": " + bank);
             } else {
-                plugin.getLogger().finer("Sincronizado banco desde Lands para " + landId);
+                plugin.getDebugLogger().finer("Sincronizado banco desde Lands para " + landId);
             }
             return true;
         } catch (Throwable t) {
@@ -491,11 +491,11 @@ public class CurrencyManager {
         try {
             Object land = findLandById(landId);
             if (land == null) {
-                plugin.getLogger().fine("syncToLands: no se encontró Land para id=" + landId);
+                plugin.getDebugLogger().fine("syncToLands: no se encontró Land para id=" + landId);
                 return false;
             }
             boolean ok = writeBankToLandObject(land, amount == null ? java.math.BigDecimal.ZERO : amount);
-            if (ok) plugin.getLogger().fine("Escrito banco hacia Lands para " + landId + ": " + amount);
+            if (ok) plugin.getDebugLogger().fine("Escrito banco hacia Lands para " + landId + ": " + amount);
             else plugin.getLogger().warning("No se encontró método para escribir banco en Land " + landId);
             return ok;
         } catch (Throwable t) {
@@ -532,15 +532,15 @@ public class CurrencyManager {
                 // Only log summary if there were any failures or if configured to log successes
                 boolean logSuccess = plugin.getConfig().getBoolean("currency.sync.log_success", false);
                 if (failed > 0 || logSuccess) {
-                    plugin.getLogger().info("Periodic sync summary: total=" + total + " succeeded=" + succeeded + " failed=" + failed);
+                        plugin.getLogger().info("Periodic sync summary: total=" + total + " succeeded=" + succeeded + " failed=" + failed);
                 } else {
-                    plugin.getLogger().finer("Periodic sync completed: total=" + total + " succeeded=" + succeeded);
+                    plugin.getDebugLogger().finer("Periodic sync completed: total=" + total + " succeeded=" + succeeded);
                 }
             } catch (Throwable t) {
                 plugin.getLogger().warning("Error en periodic sync: " + t.getMessage());
             }
         }, 20L, ticks);
-        plugin.getLogger().fine("Periodic sync scheduled every " + secs + " seconds.");
+        plugin.getDebugLogger().fine("Periodic sync scheduled every " + secs + " seconds.");
     }
 
     public boolean hasCurrency(String landId) {
