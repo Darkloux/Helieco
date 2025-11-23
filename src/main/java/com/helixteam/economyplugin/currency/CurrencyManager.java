@@ -429,19 +429,25 @@ public class CurrencyManager {
         try {
             Object land = findLandById(landId);
             if (land == null) {
-                plugin.getLogger().fine("syncFromLands: no se encontró Land para id=" + landId);
+                // do not spam logs if land not found during periodic runs
+                plugin.getLogger().finer(() -> "syncFromLands: no se encontró Land para id=" + landId);
                 return false;
             }
             java.math.BigDecimal bank = readBankFromLandObject(land);
             if (bank == null) {
-                plugin.getLogger().fine("syncFromLands: no se pudo leer banco desde Land " + landId);
+                plugin.getLogger().finer(() -> "syncFromLands: no se pudo leer banco desde Land " + landId);
                 return false;
             }
             var lc = getOrCreate(landId);
             lc.setBankBalance(bank);
             save(lc);
             requestRefresh(landId);
-            plugin.getLogger().fine("Sincronizado banco desde Lands para " + landId + ": " + bank);
+            // Log successful sync only if configured to do so (reduces log noise)
+            if (plugin.getConfig().getBoolean("currency.sync.log_success", false)) {
+                plugin.getLogger().info("Sincronizado banco desde Lands para " + landId + ": " + bank);
+            } else {
+                plugin.getLogger().finer(() -> "Sincronizado banco desde Lands para " + landId);
+            }
             return true;
         } catch (Throwable t) {
             plugin.getLogger().warning("Error en syncFromLands(" + landId + "): " + t.getMessage());
@@ -481,9 +487,25 @@ public class CurrencyManager {
         long ticks = secs * 20L;
         periodicSyncTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, () -> {
             try {
-                plugin.getLogger().fine("Periodic sync: sincronizando bancos desde Lands para " + currencies.size() + " lands");
+                // Run sync for each land, but avoid noisy per-land logs. Collect summary counts.
+                int total = 0;
+                int succeeded = 0;
+                int failed = 0;
                 for (String id : new ArrayList<>(currencies.keySet())) {
-                    try { syncFromLands(id); } catch (Throwable ignored) {}
+                    total++;
+                    try {
+                        boolean ok = syncFromLands(id);
+                        if (ok) succeeded++; else failed++;
+                    } catch (Throwable ignored) {
+                        failed++;
+                    }
+                }
+                // Only log summary if there were any failures or if configured to log successes
+                boolean logSuccess = plugin.getConfig().getBoolean("currency.sync.log_success", false);
+                if (failed > 0 || logSuccess) {
+                    plugin.getLogger().info("Periodic sync summary: total=" + total + " succeeded=" + succeeded + " failed=" + failed);
+                } else {
+                    plugin.getLogger().finer(() -> "Periodic sync completed: total=" + total + " succeeded=" + succeeded);
                 }
             } catch (Throwable t) {
                 plugin.getLogger().warning("Error en periodic sync: " + t.getMessage());
