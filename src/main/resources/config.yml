@@ -1,0 +1,47 @@
+currency:
+  default_item: PAPER
+  expiration_days: 30
+  max_issue_count: 100
+  # Sincronización con Lands
+  sync:
+    enabled: false
+    # Intervalo en segundos para sincronización periódica (0 = deshabilitado)
+    interval_seconds: 300
+
+biomes:
+  - PLAINS
+  - DESERT
+  - SAVANNA
+
+# Reglas avanzadas por bioma y material. Semántica:
+# - chance: probabilidad 0.0..1.0 de que se aplique multiplier
+# - multiplier: se aplica solo si chance acierta. multiplier=0 => drop nulo si acierta
+biome_drops:
+  PLAINS:
+    WHEAT:
+      chance: 1.0
+      multiplier: 2
+  DESERT:
+    WHEAT:
+      chance: 0.50
+      multiplier: 0
+  SAVANNA:
+    PORKCHOP:
+      chance: 0.50
+      multiplier: 2
+
+work_points:
+  actions:
+    break:
+      IRON_ORE: 10
+      OAK_LOG: 5
+    place:
+      COBBLESTONE: 1
+    interaction:
+      CRAFTING_TABLE: 1
+      FURNACE: 2
+    kill:
+      ZOMBIE: 5
+      CREEPER: 8
+  # Cooldown (segundos) entre otorgar puntos al mismo jugador por la misma acción/material
+  cooldown_seconds: 5

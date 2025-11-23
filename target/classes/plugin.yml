@@ -1,0 +1,51 @@
+name: Helieco
+main: com.helixteam.economyplugin.EconomyPlugin
+version: 0.1.0
+api-version: "1.20"
+depend: [Lands, Essentials]
+commands:
+  landcurrency:
+    description: Manage land currencies
+    usage: /<command> <create|rename|emit|info|redeem|sync|forceredeem>
+
+permissions:
+  # Base wildcard: grants access to all subcommands (OP by default)
+  helieco.landcurrency:
+    description: Access to all landcurrency subcommands
+    default: op
+
+  # Subcommand permissions (use granular permissions to control access)
+  helieco.landcurrency.create:
+    description: Create or initialize the land currency
+    default: op
+  helieco.landcurrency.rename:
+    description: Rename the currency for the land
+    default: op
+  helieco.landcurrency.emit:
+    description: Emit bills for your land
+    default: op
+  helieco.landcurrency.info:
+    description: View land currency information
+    default: true
+  helieco.landcurrency.redeem:
+    description: Redeem a bill from your hand (requires bill expired)
+    default: true
+  helieco.landcurrency.sync:
+    description: Force sync currency data from Lands for your land
+    default: op
+  helieco.landcurrency.forceredeem:
+    description: Force redeem a bill ignoring expiry (OP only)
+    default: op
+
+  # Admin / utility
+  helieco.reload:
+    description: Reload plugin configuration
+    default: op
+  helieco.admin:
+    description: Internal admin permission used by the plugin to bypass owner checks
+    default: op
+
+  # Backwards/compat: single permission for forceredeem referenced in code
+  helieco.forceredeem:
+    description: Legacy alias for forceredeem
+    default: op

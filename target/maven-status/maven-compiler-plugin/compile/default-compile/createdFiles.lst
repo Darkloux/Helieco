@@ -1,0 +1,13 @@
+com\helixteam\economyplugin\biomes\BiomeDropManager$DropRule.class
+com\helixteam\economyplugin\currency\CurrencyManager.class
+com\helixteam\economyplugin\work\WorkListener.class
+com\helixteam\economyplugin\currency\BillItemFactory.class
+com\helixteam\economyplugin\currency\CurrencyCommands.class
+com\helixteam\economyplugin\currency\BillData.class
+com\helixteam\economyplugin\biomes\BiomeDropListener.class
+com\helixteam\economyplugin\biomes\BiomeDropManager.class
+com\helixteam\economyplugin\currency\CurrencyStorage.class
+com\helixteam\economyplugin\currency\CurrencyTabCompleter.class
+com\helixteam\economyplugin\currency\LandCurrency.class
+com\helixteam\economyplugin\EconomyPlugin.class
+com\helixteam\economyplugin\work\WorkPointManager.class
