@@ -1,15 +1,15 @@
 package com.helixteam.economyplugin.biomes;
 
+import java.util.Collection;
+import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.inventory.ItemStack;
-
-import java.util.Collection;
-import java.util.Random;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Listener que aplica las reglas dinámicas cargadas por BiomeDropManager.
@@ -46,17 +46,18 @@ public class BiomeDropListener implements Listener {
         // como para generar las entidades resultantes).
         Collection<ItemStack> drops = block.getDrops(player.getInventory().getItemInMainHand());
 
-        // Comprueba cooldowns: si para alguno de los materiales ya existe un cooldown
-        // activo para este jugador, no interferimos (dejamos comportamiento por defecto).
+        // Comprueba cooldowns por material: recopilamos qué materiales están en cooldown
+        // para este jugador. En vez de devolver temprano, si hay cooldown para un material
+        // concreto simplemente NO aplicaremos la regla (se reemitirá el drop base).
         UUID puid = player.getUniqueId();
         long now = System.currentTimeMillis();
         Map<org.bukkit.Material, Long> playerMap = lastApplied.get(puid);
+        java.util.Set<org.bukkit.Material> cooled = new java.util.HashSet<>();
         if (playerMap != null) {
             for (ItemStack d : drops) {
                 Long t = playerMap.get(d.getType());
                 if (t != null && (now - t) < (long) cooldownSeconds * 1000L) {
-                    // Cooldown activo: no interferir
-                    return;
+                    cooled.add(d.getType());
                 }
             }
         }
@@ -82,13 +83,21 @@ public class BiomeDropListener implements Listener {
         for (ItemStack drop : drops) {
             int baseAmount = drop.getAmount();
 
-            // Preferir reglas específicas para el material del drop; si no existe, usar regla del bloque
+            // Si este material está en cooldown para el jugador, NO aplicamos la regla
+            // (se reemitirá el drop base). En caso contrario, buscamos una regla específica
+            // para el drop y usamos la regla del bloque como fallback.
+            if (cooled.contains(drop.getType())) {
+                ItemStack outDefault = drop.clone();
+                outDefault.setAmount(baseAmount);
+                block.getWorld().dropItemNaturally(block.getLocation(), outDefault);
+                continue;
+            }
+
             var dropRuleOpt = manager.getRule(biome, drop.getType());
             BiomeDropManager.DropRule ruleToApply = dropRuleOpt.orElse(rule);
 
             // Si no existe ninguna regla para este drop concreto (y rule también puede ser null),
-            // mantenemos el comportamiento por defecto (mismo amount) — pero dado que hemos desactivado
-            // los drops automáticos, debemos re-emitir el drop con la cantidad original.
+            // reemitimos el drop base.
             if (ruleToApply == null) {
                 ItemStack outDefault = drop.clone();
                 outDefault.setAmount(baseAmount);
@@ -117,12 +126,15 @@ public class BiomeDropListener implements Listener {
             block.getWorld().dropItemNaturally(block.getLocation(), out);
         }
 
-        // Registrar timestamps de aplicación para evitar re-aplicaciones rápidas
+        // Registrar timestamps de aplicación para los materiales que realmente procesamos
         UUID playerId = player.getUniqueId();
         Map<org.bukkit.Material, Long> map = lastApplied.computeIfAbsent(playerId, k -> new ConcurrentHashMap<>());
         long appliedAt = System.currentTimeMillis();
         for (ItemStack d : drops) {
-            map.put(d.getType(), appliedAt);
+            org.bukkit.Material m = d.getType();
+            if (!cooled.contains(m) && manager.getRule(biome, m).isPresent() || (rule != null && !cooled.contains(m))) {
+                map.put(m, appliedAt);
+            }
         }
     }
 }
