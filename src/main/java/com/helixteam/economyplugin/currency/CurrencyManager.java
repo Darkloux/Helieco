@@ -202,9 +202,8 @@ public class CurrencyManager {
      * Esto evita ejecutar refreshBillLore múltiples veces seguidas y protege el rendimiento.
      */
     public void requestRefresh(String landId) {
-        // Si ya hay una tarea pendiente, no programamos otra
-        if (pendingRefresh.containsKey(landId)) return;
-        // Programar ejecución en 2 ticks para agrupar posibles cambios rápidos
+        // Intentar reservar una tarea pendiente de forma atómica para evitar races
+        // Creamos la tarea y la insertamos solo si no existía otra
         org.bukkit.scheduler.BukkitTask task = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             try {
                 refreshBillLore(landId);
@@ -212,7 +211,12 @@ public class CurrencyManager {
                 pendingRefresh.remove(landId);
             }
         }, 2L);
-        pendingRefresh.put(landId, task);
+        // Si ya existe una tarea, cancelar la recién creada y no reemplazarla
+        org.bukkit.scheduler.BukkitTask prev = pendingRefresh.putIfAbsent(landId, task);
+        if (prev != null) {
+            // ya había una tarea pendiente; cancelar la que acabamos de crear
+            try { task.cancel(); } catch (Throwable ignored) {}
+        }
     }
 
     /**
@@ -283,14 +287,39 @@ public class CurrencyManager {
 
                 java.util.Iterator<?> iter = null;
                 if (out.getClass().isArray()) {
-                    Object[] arr = (Object[]) out;
-                    iter = java.util.Arrays.asList(arr).iterator();
+                    // manejar arrays de cualquier tipo de forma segura
+                    int len = java.lang.reflect.Array.getLength(out);
+                    for (int ai = 0; ai < len; ai++) {
+                        Object candidate = java.lang.reflect.Array.get(out, ai);
+                        if (candidate == null) continue;
+                        // Comprobar candidato
+                        try {
+                            String ts = candidate.toString();
+                            if (ts != null && ts.contains(landId)) {
+                                plugin.getLogger().fine("findLandById: matched land via collection method " + m.getName());
+                                return candidate;
+                            }
+                        } catch (Throwable ignored) {}
+                        try {
+                            for (String gid : new String[]{"getUlid", "getULID", "getId", "getLandId", "ulid"}) {
+                                try {
+                                    Method gm = candidate.getClass().getMethod(gid);
+                                    Object val = gm.invoke(candidate);
+                                    if (val != null && val.toString().equals(landId)) {
+                                        plugin.getLogger().fine("findLandById: matched land via getter " + gid + " on " + m.getName());
+                                        return candidate;
+                                    }
+                                } catch (NoSuchMethodException ignored) {}
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                    continue;
                 } else if (out instanceof java.util.Map) {
                     iter = ((java.util.Map<?,?>) out).values().iterator();
-                } else if (out instanceof java.lang.Iterable) {
-                    iter = ((java.lang.Iterable<?>) out).iterator();
                 } else if (out instanceof java.util.Collection) {
                     iter = ((java.util.Collection<?>) out).iterator();
+                } else if (out instanceof java.lang.Iterable) {
+                    iter = ((java.lang.Iterable<?>) out).iterator();
                 }
 
                 if (iter == null) continue;
@@ -430,12 +459,12 @@ public class CurrencyManager {
             Object land = findLandById(landId);
             if (land == null) {
                 // do not spam logs if land not found during periodic runs
-                plugin.getLogger().finer(() -> "syncFromLands: no se encontró Land para id=" + landId);
+                plugin.getLogger().finer("syncFromLands: no se encontró Land para id=" + landId);
                 return false;
             }
             java.math.BigDecimal bank = readBankFromLandObject(land);
             if (bank == null) {
-                plugin.getLogger().finer(() -> "syncFromLands: no se pudo leer banco desde Land " + landId);
+                plugin.getLogger().finer("syncFromLands: no se pudo leer banco desde Land " + landId);
                 return false;
             }
             var lc = getOrCreate(landId);
@@ -446,7 +475,7 @@ public class CurrencyManager {
             if (plugin.getConfig().getBoolean("currency.sync.log_success", false)) {
                 plugin.getLogger().info("Sincronizado banco desde Lands para " + landId + ": " + bank);
             } else {
-                plugin.getLogger().finer(() -> "Sincronizado banco desde Lands para " + landId);
+                plugin.getLogger().finer("Sincronizado banco desde Lands para " + landId);
             }
             return true;
         } catch (Throwable t) {
@@ -505,7 +534,7 @@ public class CurrencyManager {
                 if (failed > 0 || logSuccess) {
                     plugin.getLogger().info("Periodic sync summary: total=" + total + " succeeded=" + succeeded + " failed=" + failed);
                 } else {
-                    plugin.getLogger().finer(() -> "Periodic sync completed: total=" + total + " succeeded=" + succeeded);
+                    plugin.getLogger().finer("Periodic sync completed: total=" + total + " succeeded=" + succeeded);
                 }
             } catch (Throwable t) {
                 plugin.getLogger().warning("Error en periodic sync: " + t.getMessage());
